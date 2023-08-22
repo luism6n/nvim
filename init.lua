@@ -67,7 +67,7 @@ vim.opt.rtp:prepend(lazypath)
 require('lazy').setup({
   -- NOTE: First, some plugins that don't require any configuration
   'phaazon/hop.nvim',
-  "elentok/format-on-save.nvim",
+  'elentok/format-on-save.nvim',
   "luukvbaal/statuscol.nvim",
 
   -- Git related plugins
@@ -516,7 +516,8 @@ vim.keymap.set('n', '<leader>q', vim.diagnostic.setloclist, { desc = 'Open diagn
 
 -- [[ Configure LSP ]]
 --  This function gets run when an LSP connects to a particular buffer.
-local on_attach = function(_, bufnr)
+local lsp_custom_attach = function(_, bufnr)
+  print("ATTACHED")
   -- NOTE: Remember that lua is a real programming language, and as such it is possible
   -- to define small helper and utility functions so you don't have to repeat yourself
   -- many times.
@@ -597,11 +598,13 @@ mason_lspconfig.setup {
   ensure_installed = vim.tbl_keys(servers),
 }
 
+print("mason_lspconfig")
 mason_lspconfig.setup_handlers {
   function(server_name)
+    print("require lspconfig", server_name)
     require('lspconfig')[server_name].setup {
       capabilities = capabilities,
-      on_attach = on_attach,
+      on_attach = lsp_custom_attach,
       settings = servers[server_name],
       filetypes = (servers[server_name] or {}).filetypes,
     }
