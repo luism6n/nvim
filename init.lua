@@ -66,6 +66,9 @@ vim.opt.rtp:prepend(lazypath)
 --    as they will be available in your neovim runtime.
 require('lazy').setup({
   -- NOTE: First, some plugins that don't require any configuration
+  'phaazon/hop.nvim',
+  "elentok/format-on-save.nvim",
+  "luukvbaal/statuscol.nvim",
 
   -- Git related plugins
   'tpope/vim-fugitive',
@@ -86,11 +89,22 @@ require('lazy').setup({
 
       -- Useful status updates for LSP
       -- NOTE: `opts = {}` is the same as calling `require('fidget').setup({})`
-      { 'j-hui/fidget.nvim', tag = 'legacy', opts = {} },
+      {
+        'j-hui/fidget.nvim',
+        tag = 'legacy',
+        opts = {}
+      },
 
       -- Additional lua configuration, makes nvim stuff amazing!
       'folke/neodev.nvim',
     },
+  },
+
+  {
+    'kevinhwang91/nvim-ufo',
+    dependencies = {
+      'kevinhwang91/promise-async',
+    }
   },
 
   {
@@ -110,21 +124,18 @@ require('lazy').setup({
   },
 
   -- Useful plugin to show you pending keybinds.
-  { 'folke/which-key.nvim', opts = {} },
+  {
+    'folke/which-key.nvim',
+    opts = {}
+  },
   {
     -- Adds git related signs to the gutter, as well as utilities for managing changes
     'lewis6991/gitsigns.nvim',
     opts = {
       -- See `:help gitsigns.txt`
-      signs = {
-        add = { text = '+' },
-        change = { text = '~' },
-        delete = { text = '_' },
-        topdelete = { text = '‾' },
-        changedelete = { text = '~' },
-      },
       on_attach = function(bufnr)
-        vim.keymap.set('n', '<leader>gp', require('gitsigns').prev_hunk, { buffer = bufnr, desc = '[G]o to [P]revious Hunk' })
+        vim.keymap.set('n', '<leader>gp', require('gitsigns').prev_hunk,
+          { buffer = bufnr, desc = '[G]o to [P]revious Hunk' })
         vim.keymap.set('n', '<leader>gn', require('gitsigns').next_hunk, { buffer = bufnr, desc = '[G]o to [N]ext Hunk' })
         vim.keymap.set('n', '<leader>ph', require('gitsigns').preview_hunk, { buffer = bufnr, desc = '[P]review [H]unk' })
       end,
@@ -162,6 +173,8 @@ require('lazy').setup({
     opts = {
       char = '┊',
       show_trailing_blankline_indent = false,
+      space_char_blankline = " ",
+      show_current_context = true,
     },
   },
 
@@ -217,8 +230,10 @@ require('lazy').setup({
 -- See `:help vim.o`
 -- NOTE: You can change these options as you wish!
 
--- Set highlight on search
-vim.o.hlsearch = false
+vim.o.foldcolumn = '1' -- '0' is not bad
+vim.o.foldlevel = 99   -- Using ufo provider need a large value, feel free to decrease the value
+vim.o.foldlevelstart = 99
+vim.o.foldenable = true
 
 -- Make line numbers default
 vim.wo.number = true
@@ -264,6 +279,10 @@ vim.keymap.set({ 'n', 'v' }, '<Space>', '<Nop>', { silent = true })
 vim.keymap.set('n', 'k', "v:count == 0 ? 'gk' : 'k'", { expr = true, silent = true })
 vim.keymap.set('n', 'j', "v:count == 0 ? 'gj' : 'j'", { expr = true, silent = true })
 
+vim.keymap.set('n', 'zL', require('ufo').openAllFolds)
+vim.keymap.set('n', 'zM', require('ufo').closeAllFolds)
+vim.keymap.set('n', 'zl', 'zr') -- fold [L]ess
+
 -- [[ Highlight on yank ]]
 -- See `:help vim.highlight.on_yank()`
 local highlight_group = vim.api.nvim_create_augroup('YankHighlight', { clear = true })
@@ -273,6 +292,116 @@ vim.api.nvim_create_autocmd('TextYankPost', {
   end,
   group = highlight_group,
   pattern = '*',
+})
+
+-- [[ Configure format-on-save ]]
+local formatters = require("format-on-save.formatters")
+require('format-on-save').setup({
+  formatter_by_ft = {
+    css = formatters.lsp,
+    html = formatters.lsp,
+    java = formatters.lsp,
+    json = formatters.lsp,
+    lua = formatters.lsp,
+    markdown = formatters.prettierd,
+    openscad = formatters.lsp,
+    rust = formatters.lsp,
+    scad = formatters.lsp,
+    scss = formatters.lsp,
+    sh = formatters.shfmt,
+    terraform = formatters.lsp,
+    typescriptreact = formatters.prettierd,
+    yaml = formatters.lsp,
+
+    -- Concatenate formatters
+    python = {
+      formatters.remove_trailing_whitespace,
+      formatters.black,
+      formatters.ruff,
+    },
+
+    -- Use a tempfile instead of stdin
+    go = {
+      formatters.shell({
+        cmd = { "goimports-reviser", "-rm-unused", "-set-alias", "-format", "%" },
+        tempfile = function()
+          return vim.fn.expand("%") .. '.formatter-temp'
+        end
+      }),
+      formatters.shell({ cmd = { "gofmt" } }),
+    },
+
+    javascript = {
+      formatters.lsp,
+      formatters.if_file_exists({
+        pattern = ".eslintrc.*",
+        formatter = formatters.eslint_d_fix
+      }),
+      formatters.if_file_exists({
+        pattern = { ".prettierrc", ".prettierrc.*", "prettier.config.*" },
+        formatter = formatters.prettierd,
+      }),
+      -- By default it stops at the git repo root (or "/" if git repo not found)
+      -- but it can be customized with the `stop_path` option:
+      formatters.if_file_exists({
+        pattern = ".prettierrc",
+        formatter = formatters.prettierd,
+        stop_path = function()
+          return "/my/custom/stop/path"
+        end
+      }),
+    },
+
+    typescript = {
+      formatters.lsp,
+      formatters.if_file_exists({
+        pattern = ".eslintrc.*",
+        formatter = formatters.eslint_d_fix
+      }),
+      formatters.if_file_exists({
+        pattern = { ".prettierrc", ".prettierrc.*", "prettier.config.*" },
+        formatter = formatters.prettierd,
+      }),
+      -- By default it stops at the git repo root (or "/" if git repo not found)
+      -- but it can be customized with the `stop_path` option:
+      formatters.if_file_exists({
+        pattern = ".prettierrc",
+        formatter = formatters.prettierd,
+        stop_path = function()
+          return "/my/custom/stop/path"
+        end
+      }),
+    },
+  },
+
+  -- Optional: fallback formatter to use when no formatters match the current filetype
+  fallback_formatter = {
+    formatters.remove_trailing_whitespace,
+    formatters.prettierd,
+  },
+
+  partial_update = true
+})
+
+-- [[ Configure Hop ]]
+local hop = require('hop')
+local directions = require('hop.hint').HintDirection
+vim.keymap.set('', 'f', function()
+  hop.hint_char1({ direction = directions.AFTER_CURSOR })
+end, { remap = true })
+vim.keymap.set('', 'F', function()
+  hop.hint_char1({ direction = directions.BEFORE_CURSOR })
+end, { remap = true })
+vim.keymap.set('', 't', function()
+  hop.hint_char1({ direction = directions.AFTER_CURSOR, hint_offset = -1 })
+end, { remap = true })
+vim.keymap.set('', 'T', function()
+  hop.hint_char1({ direction = directions.BEFORE_CURSOR, hint_offset = 1 })
+end, { remap = true })
+hop.setup({
+  opts = {
+    current_line_only = false,
+  }
 })
 
 -- [[ Configure Telescope ]]
@@ -314,6 +443,10 @@ vim.keymap.set('n', '<leader>sd', require('telescope.builtin').diagnostics, { de
 require('nvim-treesitter.configs').setup {
   -- Add languages to be installed here that you want installed for treesitter
   ensure_installed = { 'c', 'cpp', 'go', 'lua', 'python', 'rust', 'tsx', 'typescript', 'vimdoc', 'vim' },
+  sync_install = false,
+
+  modules = {},
+  ignore_install = {},
 
   -- Autoinstall languages that are not installed. Defaults to false (but you can change for yourself!)
   auto_install = false,
@@ -404,7 +537,7 @@ local on_attach = function(_, bufnr)
   nmap('gd', vim.lsp.buf.definition, '[G]oto [D]efinition')
   nmap('gr', require('telescope.builtin').lsp_references, '[G]oto [R]eferences')
   nmap('gI', vim.lsp.buf.implementation, '[G]oto [I]mplementation')
-  nmap('<leader>D', vim.lsp.buf.type_definition, 'Type [D]efinition')
+  nmap('gt', vim.lsp.buf.type_definition, '[G]oto [Typedef]')
   nmap('<leader>ds', require('telescope.builtin').lsp_document_symbols, '[D]ocument [S]ymbols')
   nmap('<leader>ws', require('telescope.builtin').lsp_dynamic_workspace_symbols, '[W]orkspace [S]ymbols')
 
@@ -421,7 +554,7 @@ local on_attach = function(_, bufnr)
   end, '[W]orkspace [L]ist Folders')
 
   -- Create a command `:Format` local to the LSP buffer
-  vim.api.nvim_buf_create_user_command(bufnr, 'Format', function(_)
+  vim.api.nvim_buf_create_user_command(bufnr, 'F', function(_)
     vim.lsp.buf.format()
   end, { desc = 'Format current buffer with LSP' })
 end
@@ -437,10 +570,10 @@ end
 local servers = {
   -- clangd = {},
   -- gopls = {},
-  -- pyright = {},
-  -- rust_analyzer = {},
-  -- tsserver = {},
-  -- html = { filetypes = { 'html', 'twig', 'hbs'} },
+  pyright = {},
+  --  rust_analyzer = {},
+  tsserver = {},
+  html = { filetypes = { 'html', 'twig', 'hbs' } },
 
   lua_ls = {
     Lua = {
@@ -474,6 +607,21 @@ mason_lspconfig.setup_handlers {
     }
   end
 }
+
+-- [[ Configure nvim-ufo ]]
+--
+capabilities.textDocument.foldingRange = {
+  dynamicRegistration = false,
+  lineFoldingOnly = true
+}
+local language_servers = require("lspconfig").util.available_servers() -- or list servers manually like {'gopls', 'clangd'}
+for _, ls in ipairs(language_servers) do
+  require('lspconfig')[ls].setup({
+    capabilities = capabilities
+    -- you can add other fields for setting up lsp server in this table
+  })
+end
+require('ufo').setup()
 
 -- [[ Configure nvim-cmp ]]
 -- See `:help cmp`
